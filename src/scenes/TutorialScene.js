@@ -1,3 +1,4 @@
+// src/scenes/TutorialScene.js
 import Phaser from 'phaser';
 import { W, FUENTE, txt, fondo, boton } from '../ui/ui.js';
 import { TUTORIAL } from '../data/tutorial.js';
@@ -16,8 +17,12 @@ export default class TutorialScene extends Phaser.Scene {
     this.cuerpo = this.add.text(240, 270, '', { fontFamily: FUENTE, fontSize: '40px', color: '#ffffff', wordWrap: { width: 760 }, lineSpacing: 16 }).setResolution(2);
     this.marco = this.add.graphics();
     this.contador = txt(this, W / 2, 870, '', 28, '#9fb7cc');
-    this.ant = boton(this, 560, 960, '◀ ANTERIOR', () => this.ir(-1), 400);
-    this.sig = boton(this, 1360, 960, 'SIGUIENTE ▶', () => this.ir(1), 400, 0xff9f1c);
+    
+    // BOTONES HORIZONTALES: Anterior | Regresar | Siguiente
+    this.ant = boton(this, 460, 960, '◀ ANTERIOR', () => this.ir(-1), 360);
+    this.btnRegresar = boton(this, W / 2, 960, 'REGRESAR', () => this.scene.start('Personaje'), 320, 0xff5c5c);
+    this.sig = boton(this, 1460, 960, 'SIGUIENTE ▶', () => this.ir(1), 360, 0xff9f1c);
+    
     this.input.keyboard.on('keydown-RIGHT', () => this.ir(1));
     this.input.keyboard.on('keydown-LEFT', () => this.i > 0 && this.ir(-1));
     this.mostrar();

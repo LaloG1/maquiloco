@@ -1,3 +1,4 @@
+// src/scenes/PersonajeScene.js
 import Phaser from 'phaser';
 import { W, txt, fondo, boton } from '../ui/ui.js';
 import Personaje from '../systems/Personaje.js';
@@ -9,10 +10,11 @@ export default class PersonajeScene extends Phaser.Scene {
   create() {
     fondo(this);
     txt(this, W / 2, 120, 'ELIGE A TU EMPLEADO', 72, '#ffffff', { fontStyle: 'bold' });
+    
     this.sel = null;
     this.tarjetas = [['hombre', W / 2 - 300, 'EMPLEADO'], ['mujer', W / 2 + 300, 'EMPLEADA']].map(([genero, x, nombre]) => {
       const marco = this.add.graphics();
-      const p = new Personaje(this, x, 520, genero, 'produccion').setScale(3.2);
+      const p = new Personaje(this, x, 520, genero, 'produccion', 'frente').setScale(3.2);
       txt(this, x, 830, nombre, 44);
       const zona = this.add.zone(x, 520, 420, 540).setInteractive({ useHandCursor: true });
       zona.on('pointerover', () => p.caminar(true));
@@ -20,18 +22,30 @@ export default class PersonajeScene extends Phaser.Scene {
       zona.on('pointerup', () => this.elegir(genero));
       return { genero, x, p, marco };
     });
+    
     this.pintar();
-    this.btn = boton(this, W / 2, 960, 'CONTINUAR', () => {
-      const pr = cargar(); pr.personaje = this.sel; guardar(pr);
+    
+    // BOTONES HORIZONTALES: ambos ocultos al inicio
+    // CONTINUAR a la izquierda (W/2 - 250)
+    this.btnContinuar = boton(this, W / 2 + 250, 960, 'CONTINUAR', () => {
+      const pr = cargar(); 
+      pr.personaje = this.sel; 
+      guardar(pr);
       this.scene.start('Tutorial');
-    }, 460, 0xff9f1c).setVisible(false);
+    }, 420, 0xff9f1c).setVisible(false);
+    
+    // REGRESAR a la derecha (W/2 + 250)
+    this.btnRegresar = boton(this, W / 2 - 250, 960, 'REGRESAR', () => this.scene.start('Menu'), 420, 0xff5c5c).setVisible(false);
   }
 
   elegir(g) {
     this.sel = g;
     this.tarjetas.forEach(t => t.p.caminar(t.genero === g));
     this.pintar();
-    this.btn.setVisible(true);
+    
+    // Mostrar AMBOS botones al seleccionar personaje
+    this.btnContinuar.setVisible(true);
+    this.btnRegresar.setVisible(true);
   }
 
   pintar() {
