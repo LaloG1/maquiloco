@@ -5,6 +5,8 @@ import PersonajeScene from './scenes/PersonajeScene.js';
 import TutorialScene from './scenes/TutorialScene.js';
 import IntroScene from './scenes/IntroScene.js';
 import GameScene from './scenes/GameScene.js';
+import InfoScene from './scenes/InfoScene.js';
+import DinamicaScene from './scenes/DinamicaScene.js';
 
 // Resolución base 1920x1080: se ve nítida en pantallas Full HD y se reduce suave en las pequeñas.
 new Phaser.Game({
@@ -16,5 +18,5 @@ new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   render: { antialias: true, pixelArt: false, roundPixels: false },
   physics: { default: 'arcade', arcade: { debug: false } },
-  scene: [LogoScene, MenuScene, PersonajeScene, TutorialScene, IntroScene, GameScene]
+  scene: [LogoScene, MenuScene, PersonajeScene, TutorialScene, IntroScene, GameScene, InfoScene, DinamicaScene]
 });

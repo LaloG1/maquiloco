@@ -24,23 +24,30 @@ export default class GameScene extends Phaser.Scene {
     PASILLOS.forEach(p => lamparas(this, p));
     SALAS.forEach(s => decorar(this, s));
     this.puertas.forEach(d => this.dibujarPuerta(d));
+    this.crearIconos();
 
-    // Personaje: viste según el último área desbloqueada
-    const ult = Math.max(...this.prog.desbloqueadas.map(id => AREAS.findIndex(a => a.id === id)));
-    this.pj = new Personaje(this, INICIO.x, INICIO.y - 64 * ESC, this.prog.personaje || 'hombre', AREAS[ult].atuendo).setScale(ESC).setDepth(50);
+    // El personaje empieza en producción con su indumentaria; cambia de ropa al entrar a cada área
+    this.atuendoActual = AREAS[0].atuendo;
+    this.pj = new Personaje(this, INICIO.x, INICIO.y - 64 * ESC, this.prog.personaje || 'hombre', this.atuendoActual).setScale(ESC).setDepth(50);
     this.cameras.main.startFollow(this.pj, false, 0.1, 0.1);
 
-    this.k = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', arr: 'UP', aba: 'DOWN', izq: 'LEFT', der: 'RIGHT' });
+    this.k = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', arr: 'UP', aba: 'DOWN', izq: 'LEFT', der: 'RIGHT', E: 'E' });
     this.input.keyboard.on('keydown-ESC', () => this.scene.start('Menu'));
 
     // Interfaz fija en pantalla
-    this.meta = this.add.text(40, 30, '', { fontFamily: FUENTE, fontSize: '34px', color: '#ffffff', fontStyle: 'bold', backgroundColor: 'rgba(11,26,43,0.8)', padding: { x: 22, y: 12 } })
-      .setScrollFactor(0).setDepth(100).setResolution(2);
-    this.add.text(40, H - 56, 'Mover: W A S D / flechas   ·   Esc: menú', { fontFamily: FUENTE, fontSize: '24px', color: '#9fb7cc' }).setScrollFactor(0).setDepth(100).setResolution(2);
-    this.toast = this.add.text(W / 2, 150, '', { fontFamily: FUENTE, fontSize: '34px', color: '#ffffff', backgroundColor: 'rgba(160,30,30,0.9)', padding: { x: 26, y: 14 } })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(100).setAlpha(0).setResolution(2);
+    const est = { fontFamily: FUENTE, fontSize: '34px', color: '#ffffff', fontStyle: 'bold', backgroundColor: 'rgba(11,26,43,0.85)', padding: { x: 24, y: 12 } };
+    this.meta = this.add.text(40, 30, '', est).setScrollFactor(0).setDepth(100).setResolution(2);
+    this.prompt = this.add.text(W / 2, H - 130, '', est).setOrigin(0.5).setScrollFactor(0).setDepth(100).setVisible(false).setResolution(2);
+    this.add.text(40, H - 56, 'Mover: W A S D / flechas   ·   Interactuar: E   ·   Esc: menú', { fontFamily: FUENTE, fontSize: '24px', color: '#9fb7cc' }).setScrollFactor(0).setDepth(100).setResolution(2);
+    this.toast = this.add.text(W / 2, 150, '', { ...est, backgroundColor: 'rgba(160,30,30,0.92)' }).setOrigin(0.5).setScrollFactor(0).setDepth(100).setAlpha(0).setResolution(2);
     this.flecha = this.add.graphics().fillStyle(0xff9f1c).fillTriangle(-14, -16, 18, 0, -14, 16).setDepth(60);
     this.actualizarObjetivo();
+    this.refrescarIconos();
+
+    // Al volver de la información o de la dinámica se sincroniza el avance
+    this.events.off('resume', this.alReanudar, this);
+    this.events.on('resume', this.alReanudar, this);
+    this.events.once('shutdown', () => this.events.off('resume', this.alReanudar, this));
   }
 
   // ---------- Mapa ----------
@@ -78,7 +85,6 @@ export default class GameScene extends Phaser.Scene {
     d.obj = [g, t];
   }
 
-  // La Fase 4 llamará a este método al superar un área
   abrirPuerta(id) {
     const d = this.puertas.find(p => p.id === id);
     if (!d || d.abierta) return;
@@ -86,6 +92,51 @@ export default class GameScene extends Phaser.Scene {
     this.zonas.push(d);
     d.obj.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
     this.dibujarPuerta(d);
+  }
+
+  // ---------- Iconos de cada área: INFORMACIÓN (primero) y DINÁMICA ----------
+  crearIconos() {
+    this.iconos = [];
+    SALAS.forEach(s => {
+      const cx = s.x + s.w / 2, y = s.y + s.h / 2 + (s.puerta.lado !== 'arriba' ? 40 : -40);
+      [['info', cx - 140, 'INFORMACIÓN', 'i'], ['din', cx + 140, 'DINÁMICA', '▶']].forEach(([tipo, x, etiqueta, glifo]) => {
+        const c = this.add.container(x, y).setDepth(3);
+        const aro = this.add.circle(0, 0, 46).setStrokeStyle(4, s.acento, 0.9);
+        const base = this.add.circle(0, 0, 38, s.acento, 0.95);
+        const ok = txt(this, 30, -32, '✔', 30, '#5cff9d', { fontStyle: 'bold' }).setVisible(false);
+        c.add([aro, base, txt(this, 0, -2, glifo, 44, '#0b1220', { fontStyle: 'bold' }), txt(this, 0, 74, etiqueta, 20, hex(s.acento), { fontStyle: 'bold' }), ok]);
+        this.tweens.add({ targets: aro, scale: 1.25, alpha: 0.2, duration: 1200, repeat: -1 });
+        this.iconos.push({ id: s.id, tipo, x, y, c, ok });
+      });
+    });
+  }
+
+  refrescarIconos() {
+    this.iconos.forEach(ic => {
+      const visto = !!this.prog.info[ic.id];
+      if (ic.tipo === 'info') ic.ok.setVisible(visto);
+      else ic.c.setAlpha(visto ? 1 : 0.5);   // la dinámica se ve apagada hasta leer la información
+    });
+  }
+
+  usar(ic) {
+    if (ic.tipo === 'info') {
+      this.scene.launch('Info', { areaId: ic.id });
+      this.scene.pause();
+    } else if (!this.prog.info[ic.id]) {
+      this.aviso('Primero debes ver la información del área.');
+    } else {
+      this.scene.launch('Dinamica', { areaId: ic.id });
+      this.scene.pause();
+    }
+  }
+
+  alReanudar() {
+    this.input.keyboard.resetKeys();
+    this.prog = cargar();
+    this.puertas.forEach(d => this.prog.desbloqueadas.includes(d.id) && this.abrirPuerta(d.id));
+    this.actualizarObjetivo();
+    this.refrescarIconos();
   }
 
   // ---------- Lógica ----------
@@ -125,16 +176,29 @@ export default class GameScene extends Phaser.Scene {
     } else pj.caminar(false);
 
     const fy = pj.y + pie;
+    const sala = SALAS.find(s => pj.x >= s.x && pj.x <= s.x + s.w && fy >= s.y && fy <= s.y + s.h);
+    if (sala) {                                                        // cambio de indumentaria al entrar al área
+      const a = AREAS.find(x => x.id === sala.id).atuendo;
+      if (a !== this.atuendoActual) { this.atuendoActual = a; pj.vestir(a); }
+    }
+
     this.puertas.forEach(d => {
       if (!d.abierta && fy > d.y - 50 && fy < d.y + d.h + 50 && pj.x > d.x - 50 && pj.x < d.x + d.w + 50) {
-        const i = AREAS.findIndex(a => a.id === d.id);
-        this.aviso(`Área bloqueada: primero supera ${AREAS[i - 1].nombre}`);
+        this.aviso(`Área bloqueada: primero supera ${AREAS[AREAS.findIndex(a => a.id === d.id) - 1].nombre}`);
       }
     });
 
-    // Flecha guía hacia la puerta del objetivo
+    // Iconos cercanos: la tecla E los activa
+    const cerca = sala && this.iconos.find(ic => ic.id === sala.id && Phaser.Math.Distance.Between(pj.x, fy, ic.x, ic.y) < 85);
+    this.prompt.setVisible(!!cerca);
+    if (cerca) {
+      this.prompt.setText(cerca.tipo === 'info' ? 'Presiona E · Ver información del área' : 'Presiona E · Iniciar dinámica');
+      if (Phaser.Input.Keyboard.JustDown(k.E)) this.usar(cerca);
+    }
+
+    // Flecha guía hacia la puerta del objetivo (se oculta al estar dentro de esa área)
     const o = this.objetivo(), d = o && this.puertas.find(p => p.id === o.id);
-    if (d) {
+    if (d && !(sala && sala.id === o.id)) {
       const ang = Math.atan2(d.y + d.h / 2 - (pj.y + 30), d.x + d.w / 2 - pj.x);
       const dist = Phaser.Math.Distance.Between(pj.x, pj.y + 30, d.x + d.w / 2, d.y + d.h / 2);
       this.flecha.setVisible(dist > 450).setPosition(pj.x + Math.cos(ang) * 150, pj.y + 30 + Math.sin(ang) * 150).setRotation(ang);
