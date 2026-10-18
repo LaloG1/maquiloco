@@ -1,31 +1,63 @@
+// src/scenes/DinamicaScene.js
 import Phaser from 'phaser';
-import { W, FUENTE, txt, fondo, boton } from '../ui/ui.js';
+import { W, H, FUENTE, txt } from '../ui/ui.js';
 import { AREAS } from '../data/areas.js';
-import { SALAS } from '../data/mapa.js';
-import { PREGUNTAS } from '../data/preguntas.js';
-import { cargar, guardar } from '../systems/progreso.js';
+import { preguntasPorArea } from '../data/preguntas.js';
+import { cargar, guardarProgreso } from '../systems/progreso.js';
 
 const hex = c => '#' + c.toString(16).padStart(6, '0');
 
-// Dinámica del área (por ahora quiz de opción múltiple). Califica sobre 10, guarda el avance y desbloquea la siguiente área.
-export default class DinamicaScene extends Phaser.Scene {
-  constructor() { super('Dinamica'); }
+// Función para dibujar un fondo sólido que cubra todo el juego
+function dibujarFondo(scene) {
+  scene.add.rectangle(W / 2, H / 2, W, H, 0x0b1220).setDepth(1000);
+  // Borde decorativo futurista
+  scene.add.graphics().setDepth(1001)
+    .lineStyle(4, 0x00d2ff, 0.3)
+    .strokeRect(20, 20, W - 40, H - 40);
+}
 
-  init(d) { this.areaId = d.areaId; }
+export default class DinamicaScene extends Phaser.Scene {
+  constructor() { 
+    super('Dinamica'); 
+  }
+
+  init(d) { 
+    this.areaIndex = d.areaIndex !== undefined ? d.areaIndex : 0;
+    this.areaId = d.areaId; 
+  }
 
   create() {
-    this.area = AREAS.find(a => a.id === this.areaId);
-    this.ac = SALAS.find(s => s.id === this.areaId).acento;
-    const banco = PREGUNTAS[this.areaId];
-    if (!banco) return this.enConstruccion();
+    // 1. Fondo sólido para que NO se vea el juego detrás
+    dibujarFondo(this);
 
-    fondo(this);
-    this.preguntas = Phaser.Utils.Array.Shuffle([...banco]).slice(0, this.area.n);
-    this.i = 0; this.aciertos = 0; this.opciones = [];
-    this.add.text(100, 50, this.area.nombre.toUpperCase() + ' · DINÁMICA', { fontFamily: FUENTE, fontSize: '34px', color: hex(this.ac), fontStyle: 'bold' }).setResolution(2);
-    this.cont = this.add.text(W - 100, 50, '', { fontFamily: FUENTE, fontSize: '34px', color: '#9fb7cc' }).setOrigin(1, 0).setResolution(2);
-    this.barra = this.add.graphics();
-    this.txtP = this.add.text(W / 2, 270, '', { fontFamily: FUENTE, fontSize: '46px', color: '#ffffff', fontStyle: 'bold', align: 'center', wordWrap: { width: 1500 } }).setOrigin(0.5).setResolution(2);
+    // 2. Obtener datos del área (con valores por defecto por seguridad)
+    this.areaData = preguntasPorArea[this.areaIndex] || preguntasPorArea[0];
+    this.areaInfo = AREAS.find(a => a.id === this.areaId) || { nombre: 'Área', acento: 0x00d2ff, minimo: 8 };
+    this.ac = this.areaInfo.acento || 0x00d2ff;
+
+    // 3. Preparar preguntas (mezclar aleatoriamente)
+    const banco = this.areaData.preguntas;
+    this.preguntas = Phaser.Utils.Array.Shuffle([...banco]);
+    this.i = 0; 
+    this.aciertos = 0; 
+    this.opciones = [];
+    this.bloqueado = false;
+
+    // 4. Interfaz superior
+    this.add.text(100, 50, this.areaData.nombre.toUpperCase() + ' · EVALUACIÓN', { 
+      fontFamily: FUENTE || 'Arial', fontSize: '34px', color: hex(this.ac), fontStyle: 'bold' 
+    }).setDepth(1002).setResolution(2);
+
+    this.cont = this.add.text(W - 100, 50, '', { 
+      fontFamily: FUENTE || 'Arial', fontSize: '28px', color: '#9fb7cc' 
+    }).setOrigin(1, 0).setDepth(1002).setResolution(2);
+
+    this.barra = this.add.graphics().setDepth(1002);
+
+    this.txtP = this.add.text(W / 2, 250, '', { 
+      fontFamily: FUENTE || 'Arial', fontSize: '36px', color: '#ffffff', fontStyle: 'bold', align: 'center', wordWrap: { width: 1000 } 
+    }).setOrigin(0.5).setDepth(1002).setResolution(2);
+
     this.mostrar();
   }
 
@@ -33,82 +65,172 @@ export default class DinamicaScene extends Phaser.Scene {
     this.opciones.forEach(o => o.destroy());
     this.opciones = [];
     const q = this.preguntas[this.i];
+    
     this.txtP.setText(q.p);
     this.cont.setText(`Pregunta ${this.i + 1} / ${this.preguntas.length}`);
-    this.barra.clear().fillStyle(0x16283d).fillRoundedRect(100, 110, 1720, 12, 6)
-      .fillStyle(this.ac).fillRoundedRect(100, 110, Math.max(12, 1720 * this.i / this.preguntas.length), 12, 6);
-    const ops = Phaser.Utils.Array.Shuffle([{ t: q.ok, ok: true }, ...q.mal.map(t => ({ t, ok: false }))]);
-    ops.forEach((op, k) => this.opciones.push(this.opcion(op, k)));
+    
+    // Barra de progreso
+    this.barra.clear()
+      .fillStyle(0x16283d).fillRoundedRect(100, 110, 1080, 12, 6)
+      .fillStyle(this.ac).fillRoundedRect(100, 110, Math.max(12, 1080 * this.i / this.preguntas.length), 12, 6);
+
+    // Preparar opciones: 1 correcta y las demás incorrectas
+    const respuestaCorrectaTexto = q.opciones[q.correcta];
+    const respuestasIncorrectas = q.opciones.filter((_, idx) => idx !== q.correcta);
+    
+    // Mezclar opciones para que la correcta no siempre esté en el mismo lugar
+    const ops = Phaser.Utils.Array.Shuffle([
+      { t: respuestaCorrectaTexto, ok: true }, 
+      ...respuestasIncorrectas.map(t => ({ t, ok: false }))
+    ]);
+
+    ops.forEach((op, k) => this.opciones.push(this.crearOpcion(op, k)));
     this.bloqueado = false;
   }
 
-  opcion(op, k) {
-    const ancho = 1300, c = this.add.container(W / 2, 480 + k * 120), g = this.add.graphics();
-    const pintar = (fill, linea, a = 1) => g.clear().fillStyle(fill).fillRoundedRect(-ancho / 2, -48, ancho, 96, 24)
-      .lineStyle(3, linea, a).strokeRoundedRect(-ancho / 2, -48, ancho, 96, 24);
+  crearOpcion(op, k) {
+    const ancho = 1000;
+    const c = this.add.container(W / 2, 380 + k * 110).setDepth(1002);
+    const g = this.add.graphics();
+    
+    const pintar = (fill, linea, a = 1) => {
+      g.clear()
+        .fillStyle(fill).fillRoundedRect(-ancho / 2, -40, ancho, 80, 16)
+        .lineStyle(3, linea, a).strokeRoundedRect(-ancho / 2, -40, ancho, 80, 16);
+    };
+    
     pintar(0x0b1a2b, this.ac, 0.5);
-    const t = this.add.text(-ancho / 2 + 40, 0, `${'ABCD'[k]})  ${op.t}`, { fontFamily: FUENTE, fontSize: '32px', color: '#ffffff', wordWrap: { width: ancho - 80 } }).setOrigin(0, 0.5).setResolution(2);
-    c.add([g, t]).setSize(ancho, 96).setInteractive({ useHandCursor: true });
+    
+    const letras = ['A', 'B', 'C', 'D'];
+    const t = this.add.text(-ancho / 2 + 40, 0, `${letras[k]})  ${op.t}`, { 
+      fontFamily: FUENTE || 'Arial', fontSize: '28px', color: '#ffffff', wordWrap: { width: ancho - 80 } 
+    }).setOrigin(0, 0.5).setDepth(1003).setResolution(2);
+    
+    c.add([g, t]).setSize(ancho, 80).setInteractive({ useHandCursor: true });
+    
     c.on('pointerover', () => !this.bloqueado && pintar(0x12263b, this.ac, 1));
     c.on('pointerout', () => !this.bloqueado && pintar(0x0b1a2b, this.ac, 0.5));
     c.on('pointerup', () => this.responder(op));
-    c.op = op; c.pintar = pintar;
+    
+    c.op = op; 
+    c.pintar = pintar;
     return c;
   }
 
   responder(op) {
     if (this.bloqueado) return;
     this.bloqueado = true;
+    
     if (op.ok) this.aciertos++;
-    this.opciones.forEach(o => { if (o.op.ok) o.pintar(0x12361f, 0x5cff9d); else if (o.op === op) o.pintar(0x3a1616, 0xff5c5c); });
+    
+    // Mostrar visualmente cuál era la correcta (verde) y cuál se eligió (rojo si fue incorrecta)
+    this.opciones.forEach(o => { 
+      if (o.op.ok) o.pintar(0x12361f, 0x5cff9d); 
+      else if (o.op === op) o.pintar(0x3a1616, 0xff5c5c); 
+    });
+    
     this.time.delayedCall(1100, () => {
       this.i++;
-      if (this.i < this.preguntas.length) this.mostrar();
-      else this.final(Math.round(this.aciertos / this.preguntas.length * 100) / 10);
+      if (this.i < this.preguntas.length) {
+        this.mostrar();
+      } else {
+        const calif = Math.round((this.aciertos / this.preguntas.length) * 100) / 10;
+        this.final(calif);
+      }
     });
   }
 
-  // Califica, guarda el avance y muestra los mensajes: área superada → área desbloqueada (o reintentar)
   final(calif) {
-    const p = cargar(), ok = calif >= this.area.minimo, num = Number.isInteger(calif) ? calif : calif.toFixed(1);
+    const p = cargar();
+    const minimo = this.areaInfo.minimo || 8;
+    const ok = calif >= minimo;
+    const num = Number.isInteger(calif) ? calif : calif.toFixed(1);
     let nueva = null;
+
     if (ok) {
       if (!p.superadas.includes(this.areaId)) p.superadas.push(this.areaId);
-      p.puntajes[this.areaId] = Math.max(p.puntajes[this.areaId] || 0, calif);
-      const sig = AREAS[AREAS.indexOf(this.area) + 1];
-      if (sig && !p.desbloqueadas.includes(sig.id)) { p.desbloqueadas.push(sig.id); nueva = sig; }
-      guardar(p);
+      
+      // Desbloquear siguiente área
+      const siguienteArea = AREAS[this.areaIndex + 1];
+      if (siguienteArea && !p.desbloqueadas.includes(siguienteArea.id)) { 
+        p.desbloqueadas.push(siguienteArea.id); 
+        nueva = siguienteArea; 
+      }
+      
+      // Cambiar a traje formal si se aprueba Mantenimiento (índice 3) o superior
+      if (this.areaIndex >= 3) {
+        p.ropa = 'formal';
+      }
+      
+      guardarProgreso(p);
     }
-    const volver = ['VOLVER AL MAPA', () => this.volver()];
-    if (!ok) {
-      return this.panel('NO APROBASTE', '#ff5c5c', [`Calificación: ${num}/10`, `Mínimo para aprobar: ${this.area.minimo}/10`, 'Debes realizar la dinámica nuevamente hasta aprobar.'],
-        [['REINTENTAR', () => this.scene.restart({ areaId: this.areaId })], volver]);
-    }
-    const ultima = this.area.id === 'gerencia';
-    const siguiente = !nueva && !ultima ? [volver] : [['CONTINUAR', () => nueva
-      ? this.panel('ÁREA DESBLOQUEADA', hex(this.ac), [`Se desbloqueó: ${nueva.nombre.toUpperCase()}`, 'Camina hasta su puerta en el mapa para entrar.'], [volver])
-      : this.panel('¡FELICIDADES!', '#ffd166', ['Superaste todas las áreas.', '(La animación final llegará en la Fase 6)'], [volver])]];
-    this.panel('¡ÁREA SUPERADA!', '#5cff9d', [`Área: ${this.area.nombre}`, `Calificación: ${num}/10`], siguiente);
-  }
 
-  // Dinámicas aún no hechas (Fase 5): permite simular un resultado para probar el desbloqueo
-  enConstruccion() {
-    this.panel('DINÁMICA EN CONSTRUCCIÓN', '#ffd166',
-      ['Esta dinámica se desarrolla en la Fase 5.', 'Mientras tanto puedes simular un resultado para probar el desbloqueo.'],
-      [['SIMULAR 10/10 (PRUEBA)', () => this.final(10)], ['SIMULAR 5/10 (PRUEBA)', () => this.final(5)], ['VOLVER AL MAPA', () => this.volver()]]);
+    const volver = ['VOLVER AL MAPA', () => this.volver()];
+
+    if (!ok) {
+      return this.panel('NO APROBASTE', '#ff5c5c', 
+        [`Calificación: ${num}/10`, `Mínimo para aprobar: ${minimo}/10`, 'Debes realizar la dinámica nuevamente hasta aprobar.'],
+        [['REINTENTAR', () => this.scene.restart({ areaId: this.areaId, areaIndex: this.areaIndex })], volver]
+      );
+    }
+
+    const esGerencia = this.areaIndex === 7; // Asumiendo que 7 es el índice de Gerencia
+    const siguiente = !nueva && !esGerencia ? [volver] : 
+      [['CONTINUAR', () => nueva
+        ? this.panel('ÁREA DESBLOQUEADA', hex(this.ac), [`Se desbloqueó: ${nueva.nombre.toUpperCase()}`, 'Camina hasta su puerta en el mapa para entrar.'], [volver])
+        : this.panel('¡FELICIDADES!', '#ffd166', ['Superaste todas las áreas.', '¡Prepárate para la animación final!'], [volver])
+      ]];
+
+    this.panel('¡ÁREA SUPERADA!', '#5cff9d', 
+      [`Área: ${this.areaData.nombre}`, `Calificación: ${num}/10`], 
+      siguiente
+    );
   }
 
   panel(titulo, color, lineas, botones) {
     this.tweens.killAll();
     this.children.removeAll(true);
-    fondo(this);
-    txt(this, W / 2, 250, titulo, 90, color, { fontStyle: 'bold' });
-    lineas.forEach((l, i) => txt(this, W / 2, 420 + i * 80, l, 40, '#ffffff', { align: 'center', wordWrap: { width: 1500 } }));
-    botones.forEach(([t, cb], i) => boton(this, W / 2, 780 + i * 110, t, cb, 560, i === 0 ? this.ac : 0x7f8c99));
+    dibujarFondo(this); // Vuelve a dibujar el fondo para el panel final
+    
+    txt(this, W / 2, 200, titulo, 80, color, { fontStyle: 'bold' }).setDepth(1002);
+    lineas.forEach((l, i) => 
+      txt(this, W / 2, 350 + i * 70, l, 36, '#ffffff', { align: 'center', wordWrap: { width: 1000 } }).setDepth(1002)
+    );
+    
+    botones.forEach(([t, cb], i) => {
+      const esPrincipal = i === 0;
+      const colorBtn = esPrincipal ? this.ac : 0x7f8c99;
+      this.crearBoton(W / 2, 550 + i * 100, t, cb, 400, colorBtn);
+    });
+  }
+
+  crearBoton(x, y, texto, callback, ancho, color) {
+    const c = this.add.container(x, y).setDepth(1002);
+    const g = this.add.graphics();
+    const pintar = (fill) => g.clear().fillStyle(fill).fillRoundedRect(-ancho / 2, -35, ancho, 70, 16);
+    
+    pintar(color);
+    const t = this.add.text(0, 0, texto, { 
+      fontFamily: FUENTE || 'Arial', fontSize: '32px', color: '#ffffff', fontStyle: 'bold' 
+    }).setOrigin(0.5).setDepth(1003);
+    
+    c.add([g, t]).setSize(ancho, 70).setInteractive({ useHandCursor: true });
+    
+    // Efecto hover iluminando el botón
+    c.on('pointerover', () => {
+      const base = Phaser.Display.Color.ValueToColor(color);
+      pintar(Phaser.Display.Color.GetColor(
+        Math.min(255, base.r + 40),
+        Math.min(255, base.g + 40),
+        Math.min(255, base.b + 40)
+      ));
+    });
+    c.on('pointerout', () => pintar(color));
+    c.on('pointerup', () => callback());
   }
 
   volver() {
     this.scene.stop();
-    this.scene.resume('Juego');
+    this.scene.resume('Juego'); // Regresa al mapa
   }
 }

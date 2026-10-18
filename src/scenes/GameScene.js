@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { W, H, FUENTE, txt } from '../ui/ui.js';
 import { MUNDO, INICIO, PASILLOS, SALAS } from '../data/mapa.js';
 import { AREAS } from '../data/areas.js';
-import { cargar } from '../systems/progreso.js';
+import { cargar, guardarProgreso } from '../systems/progreso.js'; // Unificado
 import Personaje from '../systems/Personaje.js';
 import { crearTexturas, lamparas, decorar } from '../systems/Decoracion.js';
 
@@ -14,8 +14,27 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.prog = cargar();
+
+    // --- PARCHE INFALIBLE: Detectar el ID real de Producción y desbloquearlo ---
+    const idProduccion = AREAS[0].id; // Obtiene el ID real (ej: 0 o "produccion")
+    if (!this.prog.desbloqueadas.includes(idProduccion)) {
+      this.prog.desbloqueadas.push(idProduccion);
+      guardarProgreso(this.prog);
+      console.log("🔓 Producción forzada a desbloqueada con ID:", idProduccion);
+    }
+
+    // Diagnóstico en consola para saber exactamente qué está pasando
+    console.log("📦 IDs desbloqueados en memoria:", this.prog.desbloqueadas);
+    console.log("🚪 Salas en el mapa y sus IDs:", SALAS.map(s => ({ nombre: s.nombre, id: s.id })));
+    // ---------------------------------------------------------------------------
+
     this.obst = [];
-    this.puertas = SALAS.map(s => ({ ...s.puerta, id: s.id, abierta: this.prog.desbloqueadas.includes(s.id), obj: [] }));
+    this.puertas = SALAS.map(s => ({
+      ...s.puerta,
+      id: s.id,
+      abierta: this.prog.desbloqueadas.includes(s.id),
+      obj: []
+    }));
     this.zonas = [...PASILLOS, ...SALAS, ...this.puertas.filter(d => d.abierta)];
 
     this.cameras.main.setBackgroundColor('#04070d').setBounds(0, 0, MUNDO.w, MUNDO.h).fadeIn(700);
@@ -119,6 +138,7 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  // Dentro de GameScene.js, reemplaza el método usar(ic) por este:
   usar(ic) {
     if (ic.tipo === 'info') {
       this.scene.launch('Info', { areaId: ic.id });
@@ -126,7 +146,11 @@ export default class GameScene extends Phaser.Scene {
     } else if (!this.prog.info[ic.id]) {
       this.aviso('Primero debes ver la información del área.');
     } else {
-      this.scene.launch('Dinamica', { areaId: ic.id });
+      // NUEVO: Encontrar el índice numérico del área (0 a 7) para que coincida con el array de preguntas
+      const areaIndex = AREAS.findIndex(a => a.id === ic.id);
+
+      // Pasamos tanto el ID como el índice numérico
+      this.scene.launch('Dinamica', { areaId: ic.id, areaIndex: areaIndex });
       this.scene.pause();
     }
   }
@@ -134,6 +158,14 @@ export default class GameScene extends Phaser.Scene {
   alReanudar() {
     this.input.keyboard.resetKeys();
     this.prog = cargar();
+
+    // --- NUEVO: Actualizar vestuario al volver de la dinámica ---
+    if (this.prog.ropa === 'formal' && this.atuendoActual !== 'formal') {
+      this.atuendoActual = 'formal';
+      this.pj.vestir('formal');
+    }
+    // -------------------------------------------------------------
+
     this.puertas.forEach(d => this.prog.desbloqueadas.includes(d.id) && this.abrirPuerta(d.id));
     this.actualizarObjetivo();
     this.refrescarIconos();
@@ -182,9 +214,13 @@ export default class GameScene extends Phaser.Scene {
       if (a !== this.atuendoActual) { this.atuendoActual = a; pj.vestir(a); }
     }
 
+    // (Dentro del método update de GameScene.js, reemplaza el forEach de puertas por esto):
     this.puertas.forEach(d => {
       if (!d.abierta && fy > d.y - 50 && fy < d.y + d.h + 50 && pj.x > d.x - 50 && pj.x < d.x + d.w + 50) {
-        this.aviso(`Área bloqueada: primero supera ${AREAS[AREAS.findIndex(a => a.id === d.id) - 1].nombre}`);
+        const idx = AREAS.findIndex(a => a.id === d.id);
+        // Si es la primera área (Producción, índice 0), usamos la misma como referencia para evitar errores
+        const prevArea = idx > 0 ? AREAS[idx - 1] : AREAS[0];
+        this.aviso(`Área bloqueada: primero supera el área de ${prevArea.nombre}`);
       }
     });
 
