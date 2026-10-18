@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { W, txt, boton } from '../ui/ui.js';
+import { W, txt } from '../ui/ui.js';
 import Personaje from '../systems/Personaje.js';
 import { cargar } from '../systems/progreso.js';
 
@@ -34,8 +34,7 @@ export default class IntroScene extends Phaser.Scene {
   }
 
   fin() {
-    txt(this, W / 2, 900, 'Entraste a la planta. Tu primera meta: el área de PRODUCCIÓN.', 40);
-    txt(this, W / 2, 960, '(En la Fase 3 aquí empezará el recorrido por el mapa)', 28, '#cfd8e3');
-    boton(this, W / 2, 1030, 'VOLVER AL MENÚ', () => this.scene.start('Menu'), 380);
+    this.cameras.main.fadeOut(600, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Juego'));
   }
 }
