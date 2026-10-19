@@ -7,6 +7,7 @@ import IntroScene from './scenes/IntroScene.js';
 import GameScene from './scenes/GameScene.js';
 import InfoScene from './scenes/InfoScene.js';
 import DinamicaScene from './scenes/DinamicaScene.js';
+import FinalScene from './scenes/FinalScene.js'; // <-- Agrega esta línea
 
 // Resolución base 1920x1080: se ve nítida en pantallas Full HD y se reduce suave en las pequeñas.
 new Phaser.Game({
@@ -23,5 +24,5 @@ new Phaser.Game({
     target: 60,
     forceSetTimeOut: false // Usa requestAnimationFrame para máxima fluidez
   },
-  scene: [LogoScene, MenuScene, PersonajeScene, TutorialScene, IntroScene, GameScene, InfoScene, DinamicaScene]
+  scene: [LogoScene, MenuScene, PersonajeScene, TutorialScene, IntroScene, GameScene, InfoScene, DinamicaScene, FinalScene]
 });

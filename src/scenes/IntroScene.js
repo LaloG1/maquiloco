@@ -22,9 +22,9 @@ export default class IntroScene extends Phaser.Scene {
     this.pj = new Personaje(this, -80, 722, cargar().personaje || 'hombre', 'produccion').setScale(1.25).setDepth(10);
     this.secuencia();
 
-    // Saltar la intro (clic o espacio)
+    /* // Saltar la intro (clic o espacio)
     this.input.once('pointerdown', () => this.fin());
-    this.input.keyboard?.once('keydown-SPACE', () => this.fin());
+    this.input.keyboard?.once('keydown-SPACE', () => this.fin()); */
   }
 
   // ---------- Escenario ----------
@@ -74,7 +74,7 @@ export default class IntroScene extends Phaser.Scene {
     // Rótulo
     g.fillStyle(0x0b1220).fillRoundedRect(1200, 440, 440, 112, 14).lineStyle(3, 0x7df9ff, 0.85).strokeRoundedRect(1200, 440, 440, 112, 14);
     this.rotulo = txt(this, 1420, 484, 'MAQUI-LOCO', 58, '#7df9ff', { fontStyle: 'bold' }).setOrigin(0.5).setDepth(4);
-    this.sub = txt(this, 1420, 530, 'S.A. DE C.V.', 22, '#cfe9f2', { fontStyle: 'bold' }).setOrigin(0.5).setDepth(4);
+    this.sub = txt(this, 1420, 530, 'IDSW41', 22, '#cfe9f2', { fontStyle: 'bold' }).setOrigin(0.5).setDepth(4);
     if (this.game.renderer.type === Phaser.WEBGL && this.rotulo.postFX) this.rotulo.postFX.addGlow(0x00d2ff, 4, 0, false, 0.1, 16);
     // Parpadeo de neón ocasional
     this.time.addEvent({

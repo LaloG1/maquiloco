@@ -14,6 +14,11 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   create() {
+
+    // 1. OCULTAR EL SPINNER INMEDIATAMENTE al crear el menú
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+
     // Fondo con imagen y capa oscura superpuesta
     const bg = this.add.image(W / 2, H / 2, 'fondo1')
       .setDisplaySize(W, H)
