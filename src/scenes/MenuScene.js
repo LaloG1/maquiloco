@@ -23,8 +23,7 @@ export default class MenuScene extends Phaser.Scene {
 
     // Títulos con animación
     const t = txt(this, W / 2, 250, 'MAQUILOCO', 170, '#ffffff', { fontStyle: 'bold' });
-    txt(this, W / 2, 370, 'S.A. DE C.V.', 60, '#cfe28a', { fontStyle: 'bold' });
-    txt(this, W / 2, 440, 'De operador a gerente general', 32, '#3df325', { fontStyle: 'bold' });
+    txt(this, W / 2, 370, 'De operador a gerente general', 60, '#3df325', { fontStyle: 'bold' });
     
     this.tweens.add({ 
       targets: t, 
