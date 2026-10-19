@@ -18,5 +18,10 @@ new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   render: { antialias: true, pixelArt: false, roundPixels: false },
   physics: { default: 'arcade', arcade: { debug: false } },
+  // --- AGREGA ESTO PARA FORZAR 60 FPS ---
+  fps: {
+    target: 60,
+    forceSetTimeOut: false // Usa requestAnimationFrame para máxima fluidez
+  },
   scene: [LogoScene, MenuScene, PersonajeScene, TutorialScene, IntroScene, GameScene, InfoScene, DinamicaScene]
 });

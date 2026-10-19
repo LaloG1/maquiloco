@@ -353,7 +353,7 @@ export default class Personaje extends Phaser.GameObjects.Container {
     }
     if (this.tw) return;
     const o = { f: 0 };
-    this.tw = this.scene.tweens.add({ targets: o, f: 1, duration: 500, repeat: -1, onUpdate: () => this.pose(o.f * Math.PI * 2) });
+    this.tw = this.scene.tweens.add({ targets: o, f: 1, duration: 700, repeat: -1, onUpdate: () => this.pose(o.f * Math.PI * 2) });
   }
 
   pose(p) {
@@ -377,11 +377,18 @@ export default class Personaje extends Phaser.GameObjects.Container {
       this.cuerpo.y = 5; this.cuerpo.rotation = 0;
       return;
     }
-    const pierna = (l, f) => { l.rotation = -Math.sin(f) * 0.55; l.rod.rotation = 0.05 + 0.75 * Math.max(0, Math.cos(f)); };
-    const brazo = (b, f) => { b.rotation = -Math.sin(f) * 0.5; b.cod.rotation = -(0.22 + 0.4 * Math.max(0, Math.sin(f))); };
+    const pierna = (l, f) => {
+      l.rotation = -Math.sin(f) * 0.65; // Antes 0.55, ahora 0.65 (pierna más abierta)
+      l.rod.rotation = 0.05 + 0.85 * Math.max(0, Math.cos(f)); // Antes 0.75, ahora 0.85 (rodilla más dinámica)
+    };
+
+    const brazo = (b, f) => {
+      b.rotation = -Math.sin(f) * 0.6; // Antes 0.5, ahora 0.6 (brazos balancean más)
+      b.cod.rotation = -(0.25 + 0.45 * Math.max(0, Math.sin(f)));
+    };
     pierna(pC, p); pierna(pL, p + Math.PI);
     brazo(bC, p + Math.PI); brazo(bL, p);
-    this.cuerpo.y = 4 + 2 * Math.abs(Math.sin(p));
+    this.cuerpo.y = 4 + 3 * Math.abs(Math.sin(p));
     this.cuerpo.rotation = 0.03;
   }
 }

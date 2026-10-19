@@ -4,9 +4,9 @@ import { MUNDO, INICIO, PASILLOS, SALAS } from '../data/mapa.js';
 import { AREAS } from '../data/areas.js';
 import { cargar, guardarProgreso } from '../systems/progreso.js'; // Unificado
 import Personaje from '../systems/Personaje.js';
-import { crearTexturas, lamparas, decorar } from '../systems/Decoracion.js';
+import { crearTexturas, lamparas, decorar, suelos } from '../systems/Decoracion.js';
 
-const ESC = 1.2, VEL = 280;   // escala del personaje y velocidad al caminar (px/s)
+const ESC = 1.2, VEL = 350;   // escala del personaje y velocidad al caminar (px/s)
 const hex = c => '#' + c.toString(16).padStart(6, '0');
 
 export default class GameScene extends Phaser.Scene {
@@ -48,7 +48,7 @@ export default class GameScene extends Phaser.Scene {
     // El personaje empieza en producción con su indumentaria; cambia de ropa al entrar a cada área
     this.atuendoActual = AREAS[0].atuendo;
     this.pj = new Personaje(this, INICIO.x, INICIO.y - 64 * ESC, this.prog.personaje || 'hombre', this.atuendoActual).setScale(ESC).setDepth(50);
-    this.cameras.main.startFollow(this.pj, false, 0.1, 0.1);
+    this.cameras.main.startFollow(this.pj, false, 0.15, 0.15);
 
     this.k = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', arr: 'UP', aba: 'DOWN', izq: 'LEFT', der: 'RIGHT', E: 'E' });
     this.input.keyboard.on('keydown-ESC', () => this.scene.start('Menu'));
@@ -73,23 +73,22 @@ export default class GameScene extends Phaser.Scene {
   dibujarMapa() {
     const g = this.add.graphics().setDepth(-10);
     const todo = [...PASILLOS, ...SALAS, ...this.puertas];
-    g.fillStyle(0x121a28);                                           // paredes
+    g.fillStyle(0x0d1420);                                           // paredes
     todo.forEach(r => g.fillRoundedRect(r.x - 26, r.y - 26, r.w + 52, r.h + 52, 20));
     g.lineStyle(4, 0x00d2ff, 0.3);
     todo.forEach(r => g.strokeRoundedRect(r.x - 26, r.y - 26, r.w + 52, r.h + 52, 20));
-    PASILLOS.forEach(p => g.fillStyle(0x2c3646).fillRect(p.x, p.y, p.w, p.h));   // pisos
+    PASILLOS.forEach(p => g.fillStyle(0x2c3646).fillRect(p.x, p.y, p.w, p.h));   // piso base (respaldo)
     SALAS.forEach(s => g.fillStyle(s.color).fillRect(s.x, s.y, s.w, s.h));
-    g.lineStyle(2, 0xffffff, 0.05);                                  // juntas de losas (rejilla de 160 px)
-    [...PASILLOS, ...SALAS].forEach(r => {
-      for (let x = Math.ceil(r.x / 160) * 160; x < r.x + r.w; x += 160) g.lineBetween(x, r.y, x, r.y + r.h);
-      for (let y = Math.ceil(r.y / 160) * 160; y < r.y + r.h; y += 160) g.lineBetween(r.x, y, r.x + r.w, y);
-    });
+
+    suelos(this);                                                    // texturas de piso, marcas, charolas y luces
+
+    const b = this.add.graphics().setDepth(-7.5);
     SALAS.forEach(s => {                                             // borde de color y rótulo de cada área
-      g.lineStyle(6, s.acento, 0.5).strokeRect(s.x + 8, s.y + 8, s.w - 16, s.h - 16);
+      b.lineStyle(6, s.acento, 0.5).strokeRect(s.x + 8, s.y + 8, s.w - 16, s.h - 16);
       const nombre = AREAS.find(a => a.id === s.id).nombre.toUpperCase();
-      txt(this, s.x + s.w / 2, s.puerta.lado === 'arriba' ? s.y + 55 : s.y + s.h - 55, nombre, 50, hex(s.acento), { fontStyle: 'bold' }).setAlpha(0.45).setDepth(-9);
+      txt(this, s.x + s.w / 2, s.puerta.lado === 'arriba' ? s.y + 55 : s.y + s.h - 55, nombre, 50, hex(s.acento), { fontStyle: 'bold' }).setAlpha(0.45).setDepth(-7);
     });
-    txt(this, 190, 1500, 'ENTRADA', 44, '#ffd166', { fontStyle: 'bold' }).setAngle(-90).setAlpha(0.55).setDepth(-9);
+    txt(this, 190, 1500, 'ENTRADA', 44, '#ffd166', { fontStyle: 'bold' }).setAngle(-90).setAlpha(0.55).setDepth(-7);
   }
 
   dibujarPuerta(d) {
@@ -196,35 +195,59 @@ export default class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this.toast, alpha: 0, delay: 2200, duration: 600 });
   }
 
-  update(_, dt) {
-    const k = this.k, pj = this.pj, pie = 64 * ESC;
+  update(time, dt) {
+    // 1. BLINDAJE CRÍTICO: Limitar el delta time a 50ms.
+    // Esto evita que el personaje se congele o se teletransporte si el navegador ahorra energía.
+    const delta = Math.min(dt, 50);
+
+    const k = this.k;
+    const pj = this.pj;
+    const pie = 64 * ESC; // Punto de los pies para colisiones
+
+    // 2. Calcular dirección (1, 0 o -1)
     const dx = (k.D.isDown || k.der.isDown ? 1 : 0) - (k.A.isDown || k.izq.isDown ? 1 : 0);
     const dy = (k.S.isDown || k.aba.isDown ? 1 : 0) - (k.W.isDown || k.arr.isDown ? 1 : 0);
-    if (dx || dy) {
-      const d = VEL * dt / 1000 / Math.hypot(dx, dy);
-      if (this.libre(pj.x + dx * d, pj.y + pie)) pj.x += dx * d;       // ejes por separado: se desliza por las paredes
-      if (this.libre(pj.x, pj.y + dy * d + pie)) pj.y += dy * d;
-      pj.caminar(true);
-    } else pj.caminar(false);
 
-    const fy = pj.y + pie;
-    const sala = SALAS.find(s => pj.x >= s.x && pj.x <= s.x + s.w && fy >= s.y && fy <= s.y + s.h);
-    if (sala) {                                                        // cambio de indumentaria al entrar al área
-      const a = AREAS.find(x => x.id === sala.id).atuendo;
-      if (a !== this.atuendoActual) { this.atuendoActual = a; pj.vestir(a); }
+    if (dx !== 0 || dy !== 0) {
+      // 3. Normalizar velocidad: evita que caminar en diagonal sea más rápido
+      const longitud = Math.hypot(dx, dy);
+      const movX = (dx / longitud) * VEL * (delta / 1000);
+      const movY = (dy / longitud) * VEL * (delta / 1000);
+
+      // 4. Mover en ejes por separado (permite "deslizarse" suavemente por las paredes)
+      if (this.libre(pj.x + movX, pj.y + pie)) {
+        pj.x += movX;
+      }
+      if (this.libre(pj.x, pj.y + movY + pie)) {
+        pj.y += movY;
+      }
+
+      pj.caminar(true);
+    } else {
+      pj.caminar(false);
     }
 
-    // (Dentro del método update de GameScene.js, reemplaza el forEach de puertas por esto):
+    // 5. Cambio de indumentaria al entrar a un área
+    const fy = pj.y + pie;
+    const sala = SALAS.find(s => pj.x >= s.x && pj.x <= s.x + s.w && fy >= s.y && fy <= s.y + s.h);
+    if (sala) {
+      const a = AREAS.find(x => x.id === sala.id).atuendo;
+      if (a !== this.atuendoActual) {
+        this.atuendoActual = a;
+        pj.vestir(a);
+      }
+    }
+
+    // 6. Aviso de puertas bloqueadas
     this.puertas.forEach(d => {
       if (!d.abierta && fy > d.y - 50 && fy < d.y + d.h + 50 && pj.x > d.x - 50 && pj.x < d.x + d.w + 50) {
         const idx = AREAS.findIndex(a => a.id === d.id);
-        // Si es la primera área (Producción, índice 0), usamos la misma como referencia para evitar errores
         const prevArea = idx > 0 ? AREAS[idx - 1] : AREAS[0];
         this.aviso(`Área bloqueada: primero supera el área de ${prevArea.nombre}`);
       }
     });
 
-    // Iconos cercanos: la tecla E los activa
+    // 7. Interacción con iconos (tecla E)
     const cerca = sala && this.iconos.find(ic => ic.id === sala.id && Phaser.Math.Distance.Between(pj.x, fy, ic.x, ic.y) < 85);
     this.prompt.setVisible(!!cerca);
     if (cerca) {
@@ -232,12 +255,15 @@ export default class GameScene extends Phaser.Scene {
       if (Phaser.Input.Keyboard.JustDown(k.E)) this.usar(cerca);
     }
 
-    // Flecha guía hacia la puerta del objetivo (se oculta al estar dentro de esa área)
-    const o = this.objetivo(), d = o && this.puertas.find(p => p.id === o.id);
+    // 8. Flecha guía hacia el objetivo
+    const o = this.objetivo();
+    const d = o && this.puertas.find(p => p.id === o.id);
     if (d && !(sala && sala.id === o.id)) {
       const ang = Math.atan2(d.y + d.h / 2 - (pj.y + 30), d.x + d.w / 2 - pj.x);
       const dist = Phaser.Math.Distance.Between(pj.x, pj.y + 30, d.x + d.w / 2, d.y + d.h / 2);
       this.flecha.setVisible(dist > 450).setPosition(pj.x + Math.cos(ang) * 150, pj.y + 30 + Math.sin(ang) * 150).setRotation(ang);
-    } else this.flecha.setVisible(false);
+    } else {
+      this.flecha.setVisible(false);
+    }
   }
 }
